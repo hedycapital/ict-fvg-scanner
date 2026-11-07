@@ -1,0 +1,61 @@
+name: ICT FVG Scan
+
+# 每根 15m K 线收盘后恰好覆盖一次（UTC :00/:15/:30/:45 收盘 → cron 同分钟触发）
+on:
+  schedule:
+    - cron: "0,15,30,45 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "DRY_RUN：只扫描打印，不推送、不落盘"
+        required: false
+        default: "false"
+        type: boolean
+
+# 串行排队：防 cache 并发读写竞争（cancel-in-progress=false 保住每轮数据）
+concurrency:
+  group: fvg-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── state 恢复：restore/save 分离模式 ──────────────────────────────
+      # 固定 key 的 actions/cache@v4 命中后不再保存，state 永不更新 → 防重失效。
+      # 必须用 restore（restore-keys 前缀取最近一次）+ save（本 run 唯一 key）分离。
+      - name: Restore state cache
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: fvg-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            fvg-state-
+
+      - name: Run scan
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SYMBOLS: ${{ vars.SYMBOLS }}
+          TOP_N: ${{ vars.TOP_N || '100' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: python -m ict_scanner scan
+
+      # ── 仅推送成功（run step 成功）才保存 state ─────────────────────────
+      # 推送失败 → step 非零退出 → 不保存 → 下轮窗口自动重推（宁重勿漏）
+      - name: Save state cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: fvg-state-${{ github.run_id }}-${{ github.run_attempt }}

@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 运行时产物
+state.json
+*.tmp
+
+# 本地环境配置（含敏感 token）
+.env
+
+# IDE
+.idea/
+.vscode/

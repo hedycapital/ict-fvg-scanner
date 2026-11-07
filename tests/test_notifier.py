@@ -1,0 +1,53 @@
+"""notifier 单测（T15~T16）：EVICTED 过滤 / 4000 字符分片。"""
+
+from __future__ import annotations
+
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from fixtures import BASE_TIME, make_box
+
+from ict_scanner.models import Direction, EventType, FvgEvent
+from ict_scanner.notifier import TELEGRAM_LIMIT, build_blocks
+from ict_scanner.scanner import SymbolOutcome
+
+
+def _outcome(symbol: str, n_events: int, event_type=EventType.FORMATION) -> SymbolOutcome:
+    events = [
+        FvgEvent(
+            event_type,
+            make_box(Direction.BULL, bottom=100 + i, top=110 + i, formed_at_index=i),
+            BASE_TIME + i * 900_000,
+        )
+        for i in range(n_events)
+    ]
+    return SymbolOutcome(symbol, events, BASE_TIME, events and [events[-1].box] or [])
+
+
+class TestNotifier(unittest.TestCase):
+    def test_t15_evicted_not_pushed(self):
+        outcome = _outcome("BTCUSDT", 0)
+        outcome.events = [
+            FvgEvent(EventType.FORMATION, make_box(Direction.BULL, 100, 104), BASE_TIME),
+            FvgEvent(EventType.EVICTED, make_box(Direction.BEAR, 90, 95), BASE_TIME),
+        ]
+        blocks = build_blocks([outcome])
+        joined = "\n".join(blocks)
+        self.assertIn("[100, 104]", joined, "FORMATION 事件必须推送")
+        self.assertNotIn("[90, 95]", joined, "EVICTED 事件不得出现在推送内容中")
+
+    def test_t16_chunking_over_limit(self):
+        # 30 个标的 × 30 事件 ≈ 远超 4000 字符 → 必然分片且每片 ≤ 上限
+        outcomes = [_outcome(f"SYM{i}USDT", 30) for i in range(30)]
+        blocks = build_blocks(outcomes)
+        self.assertGreater(len(blocks), 1, "超长内容必须分片")
+        for b in blocks:
+            self.assertLessEqual(len(b), TELEGRAM_LIMIT)
+
+
+if __name__ == "__main__":
+    unittest.main()
