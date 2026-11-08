@@ -17,15 +17,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
-from .binance_client import BinanceClient, BinanceError
 from .config import AppConfig, load_config
 from .fvg_detector import detect_fvg_events
-from .models import Box, Candle, FvgEvent
+from .hyperliquid_client import HyperliquidClient, HyperliquidError
+from .models import INTERVAL_MS, Box, Candle, FvgEvent
 from .state import ScanState, load_state, save_state
 from .symbols import resolve_symbols
 
-INTERVAL_MS = 900_000  # 15m
-MAX_WORKERS = 8        # 并发拉取线程（对公开 API 礼貌值）
+MAX_WORKERS = 4        # 并发拉取线程（HL candleSnapshot 权重较高，礼貌值防 429）
 
 
 @dataclass(slots=True)
@@ -38,15 +37,19 @@ class SymbolOutcome:
     boxes: list[Box]    # 检测结束时活跃盒子（老→新）
 
 
-def _closed_candles(raw: list[list], now_ms: int) -> list[Candle]:
-    """只保留已收盘 K 线（close_time <= now）。close_time 取自 K 线自带时间。"""
-    return [Candle.from_binance_kline(k) for k in raw if int(k[6]) <= now_ms]
+def _closed_candles(raw: list[dict], now_ms: int) -> list[Candle]:
+    """只保留已收盘 K 线。
+
+    HL candleSnapshot 无 close_time 字段，由开盘时间 + 周期推导：
+    t + INTERVAL_MS <= now 即已收盘（不依赖本地时钟猜周期，语义与币安版一致）。
+    """
+    return [Candle.from_hyperliquid(k) for k in raw if int(k["t"]) + INTERVAL_MS <= now_ms]
 
 
 def _process_symbol(
     symbol: str,
     config: AppConfig,
-    client: BinanceClient,
+    client: HyperliquidClient,
     state: ScanState,
 ) -> SymbolOutcome | None:
     """处理单标的。返回 None 表示无新已收盘 K 线（本轮跳过）。"""
@@ -105,9 +108,7 @@ def run_scan() -> int:
     from .notifier import send_scan_report
 
     config = load_config()
-    client = BinanceClient(
-        base_url=config.binance_base_url, proxy_key=config.binance_proxy_key
-    )
+    client = HyperliquidClient(api_url=config.hl_api_url)
     state = load_state(config.state_path)
 
     symbols = resolve_symbols(config, client)
@@ -126,8 +127,8 @@ def run_scan() -> int:
                 outcome = fut.result()
                 if outcome is not None:
                     outcomes.append(outcome)
-            except BinanceError as exc:
-                # 单标的失败（退市 400 等）：记录不中断，该标的 state 不推进 → 下轮自动补
+            except HyperliquidError as exc:
+                # 单标的失败（下架/无数据等）：记录不中断，该标的 state 不推进 → 下轮自动补
                 failures.append(f"{sym}: {exc}")
 
     total_events = sum(len(o.events) for o in outcomes)

@@ -30,7 +30,7 @@ def _outcome(symbol: str, n_events: int, event_type=EventType.FORMATION) -> Symb
 
 class TestNotifier(unittest.TestCase):
     def test_t15_evicted_not_pushed(self):
-        outcome = _outcome("BTCUSDT", 0)
+        outcome = _outcome("xyz:BTC", 0)
         outcome.events = [
             FvgEvent(EventType.FORMATION, make_box(Direction.BULL, 100, 104), BASE_TIME),
             FvgEvent(EventType.EVICTED, make_box(Direction.BEAR, 90, 95), BASE_TIME),
@@ -42,11 +42,30 @@ class TestNotifier(unittest.TestCase):
 
     def test_t16_chunking_over_limit(self):
         # 30 个标的 × 30 事件 ≈ 远超 4000 字符 → 必然分片且每片 ≤ 上限
-        outcomes = [_outcome(f"SYM{i}USDT", 30) for i in range(30)]
+        outcomes = [_outcome(f"xyz:SYM{i}", 30) for i in range(30)]
         blocks = build_blocks(outcomes)
         self.assertGreater(len(blocks), 1, "超长内容必须分片")
         for b in blocks:
             self.assertLessEqual(len(b), TELEGRAM_LIMIT)
+
+    # ------------------------------------------------------------------
+    # T19 TV 图表链接：xyz:TSLA → HIP3XYZ:TSLAUSDC.P，且链接可点击
+    # ------------------------------------------------------------------
+    def test_t19_tradingview_chart_link(self):
+        from ict_scanner.notifier import tv_chart_symbol, tv_chart_url
+
+        self.assertEqual(tv_chart_symbol("xyz:TSLA"), "HIP3XYZ:TSLAUSDC.P")
+        self.assertEqual(tv_chart_symbol("xyz:GOLD"), "HIP3XYZ:GOLDUSDC.P")
+
+        outcome = _outcome("xyz:TSLA", 1)
+        blocks = build_blocks([outcome])
+        joined = "\n".join(blocks)
+        self.assertIn(
+            "https://www.tradingview.com/chart/?symbol=HIP3XYZ%3ATSLAUSDC.P",
+            joined,
+            "推送必须包含可点击的 TV 图表链接",
+        )
+        self.assertIn(">TSLA</a>", joined, "链接显示名应为去除 dex 前缀的资产名")
 
 
 if __name__ == "__main__":

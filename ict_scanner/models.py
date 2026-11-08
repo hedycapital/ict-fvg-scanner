@@ -1,14 +1,16 @@
 """核心数据模型（无 I/O）。
 
-所有价格字段用 float：与 Pine Script / 币安 API 同为 IEEE double 语义，
+所有价格字段用 float：与 Pine Script / Hyperliquid API 同为 IEEE double 语义，
 严格保证判定行为与 TradingView 一致（不引入 Decimal）。
-所有时间字段为毫秒级 Unix UTC 时间戳（与币安 K 线字段一致）。
+所有时间字段为毫秒级 Unix UTC 时间戳。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+
+INTERVAL_MS = 900_000  # 15m 周期（毫秒）；TIMEFRAME 固定 15m，全局唯一常量
 
 
 class Direction(str, Enum):
@@ -33,7 +35,7 @@ class EventType(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class Candle:
-    """一根 K 线（币安 /fapi klines 字段子集，够用即可 - YAGNI）。"""
+    """一根 K 线（Hyperliquid candleSnapshot 字段子集，够用即可 - YAGNI）。"""
 
     open_time: int    # 开盘时间 ms UTC
     open: float
@@ -44,16 +46,20 @@ class Candle:
     close_time: int   # 收盘时间 ms UTC（用于已收盘判定）
 
     @classmethod
-    def from_binance_kline(cls, k: list) -> Candle:
-        """从币安 klines REST 数组构造：[open_time, open, high, low, close, volume, close_time, ...]"""
+    def from_hyperliquid(cls, k: dict) -> Candle:
+        """从 Hyperliquid candleSnapshot 对象构造：{"t","o","h","l","c","v"}（价格为 str）。
+
+        HL 无 close_time 字段，由开盘时间 + 周期推导（15m 对齐 UTC 季度刻度）。
+        """
+        t = int(k["t"])
         return cls(
-            open_time=int(k[0]),
-            open=float(k[1]),
-            high=float(k[2]),
-            low=float(k[3]),
-            close=float(k[4]),
-            volume=float(k[5]),
-            close_time=int(k[6]),
+            open_time=t,
+            open=float(k["o"]),
+            high=float(k["h"]),
+            low=float(k["l"]),
+            close=float(k["c"]),
+            volume=float(k["v"]),
+            close_time=t + INTERVAL_MS,
         )
 
     @property

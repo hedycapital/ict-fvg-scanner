@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import html
 import time
+from urllib.parse import quote
 
 import requests
 
@@ -25,6 +26,20 @@ _EVENT_ICON = {
     EventType.MITIGATION: "🎯 回补",
 }
 _DIR_ARROW = {Direction.BULL: "BULL ⬆", Direction.BEAR: "BEAR ⬇"}
+
+
+def tv_chart_symbol(coin: str) -> str:
+    """HIP-3 标的 → TradingView 交易所符号："xyz:TSLA" → "HIP3XYZ:TSLAUSDC.P"。
+
+    TV 收录规则（已实测验证）：HIP3 + dex大写 为交易所名，合约后缀 USDC.P。
+    仅 Trade[XYZ]（xyz dex）被 TV 收录；其他 dex 无对应图表。
+    """
+    dex, _, asset = coin.partition(":")
+    return f"HIP3{dex.upper()}:{asset}USDC.P"
+
+
+def tv_chart_url(coin: str) -> str:
+    return f"https://www.tradingview.com/chart/?symbol={quote(tv_chart_symbol(coin), safe='')}"
 
 
 def _fmt_ts(ms: int) -> str:
@@ -49,7 +64,10 @@ def build_blocks(outcomes: list[SymbolOutcome]) -> list[str]:
         pushable = [e for e in outcome.events if e.event_type is not EventType.EVICTED]
         if not pushable:
             continue
-        lines = [f"\n<b>{html.escape(outcome.symbol)}</b>"]
+        # 标的名直接做成 TV 图表链接，点击即查看该合约 15m 图
+        display = html.escape(outcome.symbol.partition(":")[2] or outcome.symbol)
+        url = tv_chart_url(outcome.symbol)
+        lines = [f'\n<b><a href="{url}">{display}</a></b>']
         for ev in pushable:
             b = ev.box
             label = _EVENT_ICON[ev.event_type]

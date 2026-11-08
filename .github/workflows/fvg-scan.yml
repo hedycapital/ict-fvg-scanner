@@ -46,10 +46,8 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          BINANCE_BASE_URL: ${{ secrets.BINANCE_BASE_URL }}
-          BINANCE_PROXY_KEY: ${{ secrets.BINANCE_PROXY_KEY }}
           SYMBOLS: ${{ vars.SYMBOLS }}
-          TOP_N: ${{ vars.TOP_N || '100' }}
+          TOP_N: ${{ vars.TOP_N || '0' }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: python -m ict_scanner scan
 

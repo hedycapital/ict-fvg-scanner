@@ -1,11 +1,11 @@
 """verify 子命令：TV 一致性人工比对工具。
 
-输出三段内容，供用户在 TradingView `BINANCE:<SYMBOL>.P` 15m 图表上逐项核对：
+输出三段内容，供用户在 TradingView `HIP3XYZ:<ASSET>USDC.P` 15m 图表上逐项核对：
   ① 最新 3 根已收盘 K 线 OHLC   —— 数据同源对齐
   ② 当前活跃缺口（老→新）      —— 对照 TV 图表上现存的 FVG 盒子
   ③ 近期事件日志                —— 对照 TV 上已消失（被回补/挤出）的盒子
 
-用法: python -m ict_scanner verify --symbol BTCUSDT --limit 1500
+用法: python -m ict_scanner verify --symbol xyz:TSLA --limit 1500
 """
 
 from __future__ import annotations
@@ -13,9 +13,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 
-from .binance_client import BinanceClient
 from .fvg_detector import detect_fvg_events
+from .hyperliquid_client import HyperliquidClient
 from .models import Candle, Direction, EventType
+from .notifier import tv_chart_symbol
+from .symbols import normalize_symbol
 
 _EVENT_LABEL = {
     EventType.FORMATION: "形成",
@@ -35,13 +37,15 @@ def _fmt_price(v: float) -> str:
 
 
 def run_verify(symbol: str, limit: int, interval: str) -> int:
-    client = BinanceClient()
-    raw = client.get_klines(symbol, interval, limit)
+    coin = normalize_symbol(symbol, "xyz")
+    client = HyperliquidClient()
+    raw = client.get_klines(coin, interval, limit)
     now_ms = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
-    candles = [Candle.from_binance_kline(k) for k in raw]
+    candles = [Candle.from_hyperliquid(k) for k in raw]
     closed = [c for c in candles if c.close_time <= now_ms]
 
-    print(f"═══ verify {symbol} {interval} ═══")
+    print(f"═══ verify {coin} {interval} ═══")
+    print(f"TV 对照图表: {tv_chart_symbol(coin)} （15m）")
     print(f"拉取 {len(candles)} 根，已收盘 {len(closed)} 根（丢弃未收盘 {len(candles) - len(closed)} 根）")
 
     if len(closed) < 3:
@@ -77,7 +81,7 @@ def run_verify(symbol: str, limit: int, interval: str) -> int:
 
 
 def build_verify_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    parser.add_argument("--symbol", default="BTCUSDT", help="标的，如 BTCUSDT")
+    parser.add_argument("--symbol", default="xyz:TSLA", help="标的，如 xyz:TSLA（可省略前缀写 TSLA）")
     parser.add_argument("--limit", type=int, default=1500, help="拉取 K 线根数（默认 1500 ≈ 15.6 天）")
     parser.add_argument("--interval", default="15m", help="K 线周期（默认 15m）")
     return parser

@@ -1,17 +1,18 @@
 """应用配置：环境变量加载 + 自解析 .env（不依赖 python-dotenv）。
 
 环境变量一览（详见 .env.example）：
-  SYMBOLS              可选白名单，逗号分隔（如 BTCUSDT,ETHUSDT）；设置后跳过 Top N 拉取
-  TOP_N                默认 100：24h 成交额 Top N 作为扫描标的
+  SYMBOLS              可选白名单，逗号分隔（如 xyz:TSLA,xyz:GOLD，可省略 dex 前缀）；
+                       设置后跳过全宇宙拉取
+  TOP_N                白名单为空时按 24h 成交额取 Top N；0 = 全部（默认 0）
   TIMEFRAME            K 线周期，固定 15m（本期不改 - YAGNI）
   TELEGRAM_BOT_TOKEN   Telegram Bot Token
   TELEGRAM_CHAT_ID     Telegram Chat ID
   DRY_RUN              1/true 时不推送、不落盘，仅打印
   STATE_PATH           state.json 路径，默认 ./state.json
   KLINE_LIMIT_COLD     冷启动拉取 K 线根数，默认 1500（约 15.6 天）
-  BINANCE_BASE_URL     可选 API 反代地址（如 Cloudflare Workers）；GitHub Actions
-                       runner 出口在美国，币安按地区返回 451，此时必须配置
-  BINANCE_PROXY_KEY    反代防滥用密钥（与 Worker 代码中的 SCAN_KEY 一致，可空）
+  HL_API_URL           Hyperliquid API 地址（默认官方域名，一般无需反代——
+                       Hyperliquid 不按地区封锁）
+  HIP3_DEX             HIP-3 dex 名，默认 xyz（Trade[XYZ]：美股代币/商品/外汇）
   HTTPS_PROXY / HTTP_PROXY 代理（大陆本地调试用；Requests 原生识别，此处仅透传）
 """
 
@@ -67,16 +68,16 @@ def _get_int(env: dict[str, str], key: str, default: int) -> int:
 class AppConfig:
     """全局配置（一次构建，处处只读）。"""
 
-    symbols: list[str] = field(default_factory=list)  # 为空 = 使用 Top N
-    top_n: int = 100
+    symbols: list[str] = field(default_factory=list)  # 为空 = 使用 Top N / 全宇宙
+    top_n: int = 0                    # 0 = 全部（当前 xyz dex 约 143 个市场）
     timeframe: str = "15m"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     dry_run: bool = False
     state_path: Path = Path("state.json")
     kline_limit_cold: int = 1500
-    binance_base_url: str = "https://fapi.binance.com"
-    binance_proxy_key: str = ""
+    hl_api_url: str = "https://api.hyperliquid.xyz"
+    hip3_dex: str = "xyz"             # Trade[XYZ]：美股代币/商品/外汇
 
     # 检测器参数（与 Pine 脚本 input 一致）
     max_boxes: int = 3          # 盒子数组容量，超出先进先出挤出
@@ -97,13 +98,13 @@ def load_config(env_file_dir: Path | None = None) -> AppConfig:
 
     return AppConfig(
         symbols=symbols,
-        top_n=_get_int(env, "TOP_N", 100),
+        top_n=_get_int(env, "TOP_N", 0),
         timeframe=env.get("TIMEFRAME", "15m").strip() or "15m",
         telegram_bot_token=env.get("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=env.get("TELEGRAM_CHAT_ID", "").strip(),
         dry_run=_get_bool(env, "DRY_RUN"),
         state_path=Path(env.get("STATE_PATH", "state.json").strip() or "state.json"),
         kline_limit_cold=_get_int(env, "KLINE_LIMIT_COLD", 1500),
-        binance_base_url=env.get("BINANCE_BASE_URL", "").strip() or "https://fapi.binance.com",
-        binance_proxy_key=env.get("BINANCE_PROXY_KEY", "").strip(),
+        hl_api_url=env.get("HL_API_URL", "").strip() or "https://api.hyperliquid.xyz",
+        hip3_dex=env.get("HIP3_DEX", "").strip().lower() or "xyz",
     )

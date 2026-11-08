@@ -42,9 +42,16 @@ def make_box(
     )
 
 
-def candle_to_raw(c: Candle) -> list:
-    """Candle → 币安 klines REST 数组格式（scanner/_closed_candles 解析用）。"""
-    return [c.open_time, c.open, c.high, c.low, c.close, c.volume, c.close_time]
+def candle_to_raw(c: Candle) -> dict:
+    """Candle → Hyperliquid candleSnapshot dict 格式（scanner/_closed_candles 解析用）。"""
+    return {
+        "t": c.open_time,
+        "o": str(c.open),
+        "h": str(c.high),
+        "l": str(c.low),
+        "c": str(c.close),
+        "v": str(c.volume),
+    }
 
 
 def bull_fvg_sequence() -> list[Candle]:
@@ -61,7 +68,7 @@ def bull_fvg_sequence() -> list[Candle]:
 
 
 class MockClient:
-    """鸭子类型替代 BinanceClient：按调用顺序返回预置 klines，记录调用参数。"""
+    """鸭子类型替代 HyperliquidClient：按调用顺序返回预置 klines，记录调用参数。"""
 
     def __init__(self, responses: list[list[list]]):
         self._responses = responses

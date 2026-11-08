@@ -15,3 +15,6 @@ scan.old.log
 # IDE
 .idea/
 .vscode/
+
+# 用户截图等本地资料
+图片/
