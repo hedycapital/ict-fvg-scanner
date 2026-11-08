@@ -72,7 +72,39 @@ python -m unittest discover tests -v
 
 > 大陆网络调试：在 `.env` 设置 `HTTPS_PROXY=http://127.0.0.1:7890`。
 
-## 部署到 GitHub Actions（约 30 分钟）
+## 生产部署：两条路径
+
+### 路径 A：本地 Windows 任务计划（当前采用 ✅）
+
+适用：交易监控机常开；币安可直连（国内网络实测可达），仅 Telegram 走代理。
+
+```powershell
+# 1. 配置 .env（复制 .env.example 填写 TELEGRAM_* 与 HTTPS_PROXY）
+# 2. 注册任务（对齐 :00/:15/:30/:45 收盘，无弹窗，日志写入 logs\scan.log）
+powershell -ExecutionPolicy Bypass -File register_task.ps1
+
+# 管理
+Get-ScheduledTask ICT-FVG-Scan          # 查看状态
+Start-ScheduledTask ICT-FVG-Scan        # 手动触发
+Unregister-ScheduledTask ICT-FVG-Scan -Confirm:$false   # 卸载
+```
+
+组成：`register_task.ps1`（注册）→ `run_scan_hidden.vbs`（无窗口包装）→
+`run_scan.bat`（UTF-8 注意：bat 必须 ASCII-only）→ `python -m ict_scanner scan`。
+
+### 路径 B：GitHub Actions + Cloudflare Workers 反代
+
+⚠️ **已知的坑**：GitHub 托管 runner 出口在美国，币安 fapi 直接返回
+**451 Restricted Location**（runner 地区不可选），必须经反代访问：
+
+1. 部署 `worker/binance-proxy.js` 到 Cloudflare Workers（文件头有步骤）；
+2. 仓库 Secrets 配置 `BINANCE_BASE_URL`（workers.dev 地址）与
+   `BINANCE_PROXY_KEY`（Worker 中 SCAN_KEY）；
+3. workflow 每 15 分钟自动运行（cron 已配好，state 经 cache 持久化）。
+
+Runner 出口在非受限地区时无需反代（`BINANCE_BASE_URL` 留空即用官方域名）。
+
+## 部署步骤（Actions 路径通用部分）
 
 1. **推送本仓库到 GitHub**。建议**公共仓库**——私有仓库 2000 分钟/月额度下
    每 15 分钟一轮（约 5040 轮/月 × 1~2 分钟）会超额；公共仓库 Actions 免费。
