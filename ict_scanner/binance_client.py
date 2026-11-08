@@ -31,9 +31,15 @@ class RateLimitError(RuntimeError):
 
 
 class BinanceClient:
-    def __init__(self, base_url: str = FAPI_BASE_URL, timeout: int = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        base_url: str = FAPI_BASE_URL,
+        timeout: int = DEFAULT_TIMEOUT,
+        proxy_key: str = "",
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.proxy_key = proxy_key
         self.session = requests.Session()
         # 代理：Requests 原生读取 HTTPS_PROXY/HTTP_PROXY 环境变量，无需额外配置。
         # 大陆本地调试设置 HTTPS_PROXY 即可；Actions 海外 runner 不受影响。
@@ -41,6 +47,11 @@ class BinanceClient:
     # ------------------------------------------------------------------
     def _get(self, path: str, params: dict | None = None) -> requests.Response:
         url = self.base_url + path
+        if params is None:
+            params = {}
+        if self.proxy_key:
+            # 反代防滥用密钥：Worker 校验后剥离，不会透传到币安
+            params = {**params, "key": self.proxy_key}
         backoff = 1.0
         last_exc: Exception | None = None
         for attempt in range(1, MAX_RETRIES + 1):

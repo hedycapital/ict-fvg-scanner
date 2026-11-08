@@ -105,7 +105,9 @@ def run_scan() -> int:
     from .notifier import send_scan_report
 
     config = load_config()
-    client = BinanceClient()
+    client = BinanceClient(
+        base_url=config.binance_base_url, proxy_key=config.binance_proxy_key
+    )
     state = load_state(config.state_path)
 
     symbols = resolve_symbols(config, client)

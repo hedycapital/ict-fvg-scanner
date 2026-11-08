@@ -9,6 +9,9 @@
   DRY_RUN              1/true 时不推送、不落盘，仅打印
   STATE_PATH           state.json 路径，默认 ./state.json
   KLINE_LIMIT_COLD     冷启动拉取 K 线根数，默认 1500（约 15.6 天）
+  BINANCE_BASE_URL     可选 API 反代地址（如 Cloudflare Workers）；GitHub Actions
+                       runner 出口在美国，币安按地区返回 451，此时必须配置
+  BINANCE_PROXY_KEY    反代防滥用密钥（与 Worker 代码中的 SCAN_KEY 一致，可空）
   HTTPS_PROXY / HTTP_PROXY 代理（大陆本地调试用；Requests 原生识别，此处仅透传）
 """
 
@@ -72,6 +75,8 @@ class AppConfig:
     dry_run: bool = False
     state_path: Path = Path("state.json")
     kline_limit_cold: int = 1500
+    binance_base_url: str = "https://fapi.binance.com"
+    binance_proxy_key: str = ""
 
     # 检测器参数（与 Pine 脚本 input 一致）
     max_boxes: int = 3          # 盒子数组容量，超出先进先出挤出
@@ -99,4 +104,6 @@ def load_config(env_file_dir: Path | None = None) -> AppConfig:
         dry_run=_get_bool(env, "DRY_RUN"),
         state_path=Path(env.get("STATE_PATH", "state.json").strip() or "state.json"),
         kline_limit_cold=_get_int(env, "KLINE_LIMIT_COLD", 1500),
+        binance_base_url=env.get("BINANCE_BASE_URL", "").strip() or "https://fapi.binance.com",
+        binance_proxy_key=env.get("BINANCE_PROXY_KEY", "").strip(),
     )
