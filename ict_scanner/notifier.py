@@ -21,11 +21,12 @@ TELEGRAM_LIMIT = 4000      # 官方上限 4096，留余量
 MAX_ATTEMPTS = 3
 _RETRY_BACKOFF = (2.0, 4.0, 8.0)
 
-_EVENT_ICON = {
-    EventType.FORMATION: "🆕 形成",
-    EventType.MITIGATION: "🎯 回补",
+# 事件类型 → (图标, 动作词)：形成 = 新缺口入场，回补 = 价格触及已删除
+_EVENT_TAG = {
+    EventType.FORMATION: ("🆕", "形成"),
+    EventType.MITIGATION: ("🎯", "回补"),
 }
-_DIR_ARROW = {Direction.BULL: "BULL ⬆", Direction.BEAR: "BEAR ⬇"}
+_DIR_TAG = {Direction.BULL: "🟢BULL", Direction.BEAR: "🔴BEAR"}
 
 
 def tv_chart_symbol(coin: str) -> str:
@@ -42,8 +43,13 @@ def tv_chart_url(coin: str) -> str:
     return f"https://www.tradingview.com/chart/?symbol={quote(tv_chart_symbol(coin), safe='')}"
 
 
-def _fmt_ts(ms: int) -> str:
-    return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%H:%M")
+def _fmt_ts(ms: int, today: str = "") -> str:
+    """事件时间 HH:MM（UTC）；跨日补账窗口的事件自动带日期前缀避免歧义。"""
+    t = dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc)
+    s = t.strftime("%H:%M")
+    if today and t.strftime("%m-%d") != today:
+        s = t.strftime("%m-%d ") + s
+    return s
 
 
 def _fmt_price(v: float) -> str:
@@ -51,31 +57,43 @@ def _fmt_price(v: float) -> str:
 
 
 def build_blocks(outcomes: list[SymbolOutcome]) -> list[str]:
-    """构建消息块（每块 ≤ 4000 字符）：标的为最小分组单元，块内按事件追加。"""
+    """构建消息块（每块 ≤ 4000 字符）：标的为最小分组单元，块内按事件追加。
+
+    版式契约：
+      标题行（轮次时间 + 标的数 + 事件数，续块重复）
+      ── 每标的：链接标题行（含事件数）+ 树状缩进事件行
+      事件行四要素：动作(形成/回补) · 方向(BULL/BEAR) · 价格区间 · 时间
+    """
+    # EVICTED（数组挤出）是内部生命周期事件，不推送、不计数
+    groups = [
+        (o, [e for e in o.events if e.event_type is not EventType.EVICTED])
+        for o in outcomes
+    ]
+    groups = [(o, evs) for o, evs in groups if evs]
+    n_events = sum(len(evs) for _, evs in groups)
+    now = dt.datetime.now(dt.timezone.utc)
     header = (
-        "📡 <b>ICT FVG 缺口雷达</b>  "
-        + dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        "📡 <b>ICT FVG 缺口雷达</b>\n"
+        f"{now.strftime('%Y-%m-%d %H:%M UTC')} · {len(groups)} 标的 · {n_events} 事件"
     )
+    today = now.strftime("%m-%d")
+
     blocks: list[str] = []
     current = header
-
-    for outcome in outcomes:
-        # EVICTED（数组挤出）是内部生命周期事件，不推送
-        pushable = [e for e in outcome.events if e.event_type is not EventType.EVICTED]
-        if not pushable:
-            continue
+    for outcome, pushable in groups:
         # 标的名直接做成 TV 图表链接，点击即查看该合约 15m 图
         display = html.escape(outcome.symbol.partition(":")[2] or outcome.symbol)
         url = tv_chart_url(outcome.symbol)
-        lines = [f'\n<b><a href="{url}">{display}</a></b>']
-        for ev in pushable:
+        n = len(pushable)
+        lines = [f'\n<b><a href="{url}">{display}</a></b> · {n} 事件']
+        for i, ev in enumerate(pushable):
+            icon, action = _EVENT_TAG[ev.event_type]
+            branch = "└" if i == n - 1 else "├"
             b = ev.box
-            label = _EVENT_ICON[ev.event_type]
-            if ev.event_type is EventType.MITIGATION:
-                label += {"BULL": "🟩", "BEAR": "🟥"}[b.direction.value]
             lines.append(
-                f"{label} {b.direction.value} [{_fmt_price(b.bottom)}, {_fmt_price(b.top)}] "
-                f"@ {_fmt_ts(ev.candle_open_time)}"
+                f"{branch} {icon} <b>{action}</b> {_DIR_TAG[b.direction]} "
+                f"<code>{_fmt_price(b.bottom)}–{_fmt_price(b.top)}</code>"
+                f" · {_fmt_ts(ev.candle_open_time, today)}"
             )
         chunk = "\n".join(lines) + "\n"
         if len(current) + len(chunk) > TELEGRAM_LIMIT:

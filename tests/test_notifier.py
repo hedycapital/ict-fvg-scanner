@@ -1,4 +1,4 @@
-"""notifier 单测（T15~T16）：EVICTED 过滤 / 4000 字符分片。"""
+"""notifier 单测（T15~T19）：EVICTED 过滤 / 4000 字符分片 / TV 图表链接 / 版式要素。"""
 
 from __future__ import annotations
 
@@ -37,8 +37,21 @@ class TestNotifier(unittest.TestCase):
         ]
         blocks = build_blocks([outcome])
         joined = "\n".join(blocks)
-        self.assertIn("[100, 104]", joined, "FORMATION 事件必须推送")
-        self.assertNotIn("[90, 95]", joined, "EVICTED 事件不得出现在推送内容中")
+        self.assertIn("100–104", joined, "FORMATION 事件必须推送")
+        self.assertNotIn("90–95", joined, "EVICTED 事件不得出现在推送内容中")
+
+    def test_t20_layout_elements(self):
+        """版式：分组事件数统计、动作词、方向色标、树状缩进、标题统计行。"""
+        outcome = _outcome("xyz:TSLA", 2, EventType.MITIGATION)
+        blocks = build_blocks([outcome])
+        joined = "\n".join(blocks)
+        self.assertIn(" · 2 事件", joined, "标的行必须带事件数统计")
+        self.assertIn(" · 1 标的 · 2 事件", joined, "标题行必须带轮次统计")
+        self.assertIn("<b>回补</b>", joined, "动作词必须加粗")
+        self.assertIn("🟢BULL", joined, "BULL 必须带绿点色标")
+        self.assertIn("├ 🎯", joined, "非末行事件必须用 ├ 缩进")
+        self.assertIn("└ 🎯", joined, "末行事件必须用 └ 缩进")
+        self.assertIn("<code>100–110</code>", joined, "价格区间必须等宽高亮")
 
     def test_t16_chunking_over_limit(self):
         # 30 个标的 × 30 事件 ≈ 远超 4000 字符 → 必然分片且每片 ≤ 上限
