@@ -62,11 +62,15 @@ class TestNotifier(unittest.TestCase):
             self.assertLessEqual(len(b), TELEGRAM_LIMIT)
 
     # ------------------------------------------------------------------
-    # T19 TV 图表链接：xyz:TSLA → HIP3XYZ:TSLAUSDC.P，且链接可点击
+    # T19 链接：标的名 → HL 交易页，📊TV 后缀 → TV 图表，均可点击
     # ------------------------------------------------------------------
-    def test_t19_tradingview_chart_link(self):
-        from ict_scanner.notifier import tv_chart_symbol, tv_chart_url
+    def test_t19_hyperliquid_and_tv_links(self):
+        from ict_scanner.notifier import hyperliquid_url, tv_chart_symbol, tv_chart_url
 
+        self.assertEqual(
+            hyperliquid_url("xyz:TSLA"),
+            "https://app.hyperliquid.xyz/trade/xyz:TSLA",
+        )
         self.assertEqual(tv_chart_symbol("xyz:TSLA"), "HIP3XYZ:TSLAUSDC.P")
         self.assertEqual(tv_chart_symbol("xyz:GOLD"), "HIP3XYZ:GOLDUSDC.P")
 
@@ -74,11 +78,17 @@ class TestNotifier(unittest.TestCase):
         blocks = build_blocks([outcome])
         joined = "\n".join(blocks)
         self.assertIn(
+            "https://app.hyperliquid.xyz/trade/xyz:TSLA",
+            joined,
+            "标的名必须链接到 HL 交易页",
+        )
+        self.assertIn(
             "https://www.tradingview.com/chart/?symbol=HIP3XYZ%3ATSLAUSDC.P",
             joined,
-            "推送必须包含可点击的 TV 图表链接",
+            "推送必须保留可点击的 TV 图表后缀链接",
         )
         self.assertIn(">TSLA</a>", joined, "链接显示名应为去除 dex 前缀的资产名")
+        self.assertIn("📊TV</a>", joined, "TV 后缀链接必须带 📊TV 标识")
 
 
 if __name__ == "__main__":

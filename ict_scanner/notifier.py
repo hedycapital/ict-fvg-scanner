@@ -28,6 +28,15 @@ _EVENT_TAG = {
 _DIR_TAG = {Direction.BULL: "🟢BULL", Direction.BEAR: "🔴BEAR"}
 
 
+def hyperliquid_url(coin: str) -> str:
+    """HIP-3 标的 → Hyperliquid 交易页："xyz:TSLA" → app.hyperliquid.xyz/trade/xyz:TSLA。
+
+    HL 前端路由与 candleSnapshot 的 coin 标识一致（{dex}:{asset} 冒号分隔，已实测验证），
+    无需转换，直接拼接。
+    """
+    return f"https://app.hyperliquid.xyz/trade/{quote(coin, safe=':')}"
+
+
 def tv_chart_symbol(coin: str) -> str:
     """HIP-3 标的 → TradingView 交易所符号："xyz:TSLA" → "HIP3XYZ:TSLAUSDC.P"。
 
@@ -83,11 +92,12 @@ def build_blocks(outcomes: list[SymbolOutcome]) -> list[str]:
     blocks: list[str] = []
     current = header
     for outcome, pushable in groups:
-        # 标的名直接做成 TV 图表链接，点击即查看该合约 1h 图
+        # 标的名 → HL 交易页（直达交易）；📊TV 后缀 → TradingView 1h 图表（看图分析）
         display = html.escape(outcome.symbol.partition(":")[2] or outcome.symbol)
-        url = tv_chart_url(outcome.symbol)
+        hl = hyperliquid_url(outcome.symbol)
+        tv = tv_chart_url(outcome.symbol)
         n = len(pushable)
-        lines = [f'\n<b><a href="{url}">{display}</a></b> · {n} 事件']
+        lines = [f'\n<b><a href="{hl}">{display}</a></b> <a href="{tv}">📊TV</a> · {n} 事件']
         for i, ev in enumerate(pushable):
             icon, action = _EVENT_TAG[ev.event_type]
             branch = "└" if i == n - 1 else "├"
