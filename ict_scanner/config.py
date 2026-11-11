@@ -4,8 +4,8 @@
   SYMBOLS              可选白名单，逗号分隔（如 xyz:TSLA,xyz:GOLD，可省略 dex 前缀）；
                        设置后跳过全宇宙拉取
   MIN_VOLUME_USDC      流动性硬门槛：24h 名义成交额下限（USDC），低于者剔除；
-                       仅对全宇宙模式生效，白名单不受限（默认 10_000_000）
-  TOP_N                白名单为空时按 24h 成交额取 Top N；0 = 不过滤（默认 50）
+                       仅对全宇宙模式生效，白名单不受限（默认 0 = 不过滤）
+  TOP_N                白名单为空时按 24h 成交额取 Top N；0 = 不过滤（默认 0）
   TIMEFRAME            K 线周期，固定 1h（与 models.INTERVAL_MS 同源修改）
   TELEGRAM_BOT_TOKEN   Telegram Bot Token
   TELEGRAM_CHAT_ID     Telegram Chat ID
@@ -81,8 +81,8 @@ class AppConfig:
     """全局配置（一次构建，处处只读）。"""
 
     symbols: list[str] = field(default_factory=list)  # 为空 = 使用门槛 + Top N / 全宇宙
-    min_volume_usdc: float = 10_000_000  # 24h 成交额硬门槛（USDC），仅全宇宙模式生效
-    top_n: int = 50                   # 成交额降序取前 N；0 = 不过滤（门槛过滤后全保留）
+    min_volume_usdc: float = 0        # 24h 成交额硬门槛（USDC）；0 = 不过滤（全市场）
+    top_n: int = 0                    # 成交额降序取前 N；0 = 不过滤
     timeframe: str = "1h"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
@@ -111,8 +111,8 @@ def load_config(env_file_dir: Path | None = None) -> AppConfig:
 
     return AppConfig(
         symbols=symbols,
-        min_volume_usdc=_get_float(env, "MIN_VOLUME_USDC", 10_000_000),
-        top_n=_get_int(env, "TOP_N", 50),
+        min_volume_usdc=_get_float(env, "MIN_VOLUME_USDC", 0),
+        top_n=_get_int(env, "TOP_N", 0),
         timeframe=env.get("TIMEFRAME", "1h").strip() or "1h",
         telegram_bot_token=env.get("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=env.get("TELEGRAM_CHAT_ID", "").strip(),

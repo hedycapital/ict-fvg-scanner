@@ -47,8 +47,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SYMBOLS: ${{ vars.SYMBOLS }}
-          MIN_VOLUME_USDC: ${{ vars.MIN_VOLUME_USDC || '10000000' }}
-          TOP_N: ${{ vars.TOP_N || '50' }}
+          MIN_VOLUME_USDC: ${{ vars.MIN_VOLUME_USDC || '0' }}
+          TOP_N: ${{ vars.TOP_N || '0' }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: python -m ict_scanner scan
 

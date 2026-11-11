@@ -11,8 +11,8 @@ TradingView Pine Script「ICT 大周期缺口雷达」的 Python 1:1 移植：
 - **Trade[XYZ]（dex=xyz）**：约 143 个市场——美股代币（TSLA/NVDA/...）、ETF/指数
   （SP500/SOXL/...）、大宗商品（GOLD/SILVER/BRENTOIL/NATGAS/...）、外汇（EUR/GBP/JPY/...）
 - 排除加密货币：HIP-3 为非加密资产永续；主流币在 HL 主 dex，不在本系统扫描范围
-- 过滤 `isDelisted` 后按 24h 成交额降序 + **流动性硬门槛**（`MIN_VOLUME_USDC`，默认 1000 万
-  USDC）剔除低流动性标的，再取前 N（`TOP_N`，默认 50；0 = 门槛后全保留）；
+- 过滤 `isDelisted` 后全量扫描（约 122 个市场，按 24h 成交额降序）；
+  可选流动性硬门槛 `MIN_VOLUME_USDC`（默认 0 = 不过滤）与 `TOP_N` 截断，
   白名单 `SYMBOLS` 显式指定时不受限
 
 ## TradingView 符号映射（推送链接）
@@ -143,7 +143,7 @@ Hyperliquid 不按地区封锁——Actions 海外 runner **可直连**（无币
 | 悬空缺口 | state 保存活跃盒子并注入重算 | 只存时间戳会在回补那根静默漏检 |
 | EVICTED | 入事件日志但不推送 | 与 TV"盒子消失"行为一致，推送无意义 |
 | FORMATION | 仅 state 后台记录，不推送 | 1h 周期下新缺口仍属高频；只推"二次回踩"这一价格实际反应的瞬间，防泛滥 |
-| 流动性过滤 | 硬门槛 1000 万 USDC + Top N 50 | 低流动性标的易出噪声缺口；双保险控制盘整期全市场乱报 |
+| 流动性过滤 | 逻辑内置但默认关闭（阈值 0） | 保留按 `MIN_VOLUME_USDC`/`TOP_N` 过滤的能力，默认全市场扫描，需要时改 env 即开 |
 | 排除加密货币 | 只扫 HIP-3 xyz dex | 用户需求：美股代币/商品/外汇 |
 | TV 链接 | `HIP3<DEX>:<SYM>USDC.P` | TV symbol-search 实测收录规则 |
 
@@ -157,7 +157,7 @@ state.json 键空间变更（`BTCUSDT` → `xyz:TSLA`），旧 state 直接废�
 
 推送频率治理：周期 15m → **1h**（`INTERVAL_MS` + `TIMEFRAME` + 调度同步）；
 **FORMATION 降级**为 state 后台记录，仅 MITIGATION 触达推送（`models.PUSHABLE_EVENT_TYPES`）；
-新增**流动性硬门槛** `MIN_VOLUME_USDC`（默认 1000 万）+ `TOP_N=50` 双保险；
+新增流动性过滤能力 `MIN_VOLUME_USDC` / `TOP_N`（默认 0 = 全市场）；
 state 版本 1 → 2（旧时间戳与新周期刻度失配，强制全量冷启动重建，首轮不轰炸）。
 
 ## 扩展点（本期不实现）
