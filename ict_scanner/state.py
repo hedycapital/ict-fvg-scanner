@@ -7,7 +7,7 @@
 
 结构（每标的独立）：
   {
-    "version": 1,
+    "version": 2,
     "symbols": {
       "BTCUSDT": {
         "last_candle_open_utc": 1699999999000,   # 最后已处理 K 线 open_time ms
@@ -31,7 +31,8 @@ from pathlib import Path
 
 from .models import Box, Direction
 
-_STATE_VERSION = 1
+# v2：周期 15m → 1h，旧时间戳/盒子与新周期刻度失配，强制全量冷启动重建
+_STATE_VERSION = 2
 
 
 class ScanState:

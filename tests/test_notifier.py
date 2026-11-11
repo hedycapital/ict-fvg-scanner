@@ -1,4 +1,4 @@
-"""notifier 单测（T15~T19）：EVICTED 过滤 / 4000 字符分片 / TV 图表链接 / 版式要素。"""
+"""notifier 单测（T15~T19）：推送白名单过滤 / 4000 字符分片 / TV 图表链接 / 版式要素。"""
 
 from __future__ import annotations
 
@@ -9,19 +9,19 @@ import unittest
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from fixtures import BASE_TIME, make_box
+from fixtures import BASE_TIME, STEP_MS, make_box
 
 from ict_scanner.models import Direction, EventType, FvgEvent
 from ict_scanner.notifier import TELEGRAM_LIMIT, build_blocks
 from ict_scanner.scanner import SymbolOutcome
 
 
-def _outcome(symbol: str, n_events: int, event_type=EventType.FORMATION) -> SymbolOutcome:
+def _outcome(symbol: str, n_events: int, event_type=EventType.MITIGATION) -> SymbolOutcome:
     events = [
         FvgEvent(
             event_type,
             make_box(Direction.BULL, bottom=100 + i, top=110 + i, formed_at_index=i),
-            BASE_TIME + i * 900_000,
+            BASE_TIME + i * STEP_MS,
         )
         for i in range(n_events)
     ]
@@ -29,7 +29,7 @@ def _outcome(symbol: str, n_events: int, event_type=EventType.FORMATION) -> Symb
 
 
 class TestNotifier(unittest.TestCase):
-    def test_t15_evicted_not_pushed(self):
+    def test_t15_formation_evicted_not_pushed(self):
         outcome = _outcome("xyz:BTC", 0)
         outcome.events = [
             FvgEvent(EventType.FORMATION, make_box(Direction.BULL, 100, 104), BASE_TIME),
@@ -37,7 +37,7 @@ class TestNotifier(unittest.TestCase):
         ]
         blocks = build_blocks([outcome])
         joined = "\n".join(blocks)
-        self.assertIn("100–104", joined, "FORMATION 事件必须推送")
+        self.assertNotIn("100–104", joined, "FORMATION 仅后台记录，不得推送")
         self.assertNotIn("90–95", joined, "EVICTED 事件不得出现在推送内容中")
 
     def test_t20_layout_elements(self):

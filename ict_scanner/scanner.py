@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from .config import AppConfig, load_config
 from .fvg_detector import detect_fvg_events
 from .hyperliquid_client import HyperliquidClient, HyperliquidError
-from .models import INTERVAL_MS, Box, Candle, FvgEvent
+from .models import INTERVAL_MS, PUSHABLE_EVENT_TYPES, Box, Candle, FvgEvent
 from .state import ScanState, load_state, save_state
 from .symbols import resolve_symbols
 
@@ -94,14 +94,15 @@ def _fmt_ts(ms: int) -> str:
 
 
 def _print_outcomes(outcomes: list[SymbolOutcome]) -> None:
-    """DRY_RUN 输出：窗口诊断 + 事件明细。"""
+    """DRY_RUN 输出：窗口诊断 + 事件明细（非白名单事件标注不推送）。"""
     for o in outcomes:
         print(f"\n[{o.symbol}] 事件 {len(o.events)} 条，最后处理 K 线 {_fmt_ts(o.last_open)} UTC，"
               f"活跃盒子 {len(o.boxes)} 个")
         for ev in o.events:
             b = ev.box
+            note = "" if ev.event_type in PUSHABLE_EVENT_TYPES else "（不推送）"
             print(f"  {ev.event_type.value:<10} {b.direction.value} "
-                  f"[{b.bottom:g}, {b.top:g}] @ {_fmt_ts(ev.candle_open_time)} UTC")
+                  f"[{b.bottom:g}, {b.top:g}] @ {_fmt_ts(ev.candle_open_time)} UTC{note}")
 
 
 def run_scan() -> int:
@@ -131,8 +132,12 @@ def run_scan() -> int:
                 # 单标的失败（下架/无数据等）：记录不中断，该标的 state 不推进 → 下轮自动补
                 failures.append(f"{sym}: {exc}")
 
-    total_events = sum(len(o.events) for o in outcomes)
-    print(f"[scan] 有新K线的标的={len(outcomes)} 事件总数={total_events} 单标的失败={len(failures)}")
+    # 计数口径与推送一致：只统计推送白名单内的事件（FORMATION 后台记录不触发消息）
+    total_events = sum(
+        len([e for e in o.events if e.event_type in PUSHABLE_EVENT_TYPES])
+        for o in outcomes
+    )
+    print(f"[scan] 有新K线的标的={len(outcomes)} 可推送事件={total_events} 单标的失败={len(failures)}")
     for f in failures:
         print(f"[warn] {f}")
 

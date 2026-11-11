@@ -1,9 +1,9 @@
 name: ICT FVG Scan
 
-# 每根 15m K 线收盘后恰好覆盖一次（UTC :00/:15/:30/:45 收盘 → cron 同分钟触发）
+# 每根 1h K 线收盘后触发（UTC 整点收盘 → cron :05 触发，留数据落定缓冲）
 on:
   schedule:
-    - cron: "0,15,30,45 * * * *"
+    - cron: "5 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -47,7 +47,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SYMBOLS: ${{ vars.SYMBOLS }}
-          TOP_N: ${{ vars.TOP_N || '0' }}
+          MIN_VOLUME_USDC: ${{ vars.MIN_VOLUME_USDC || '10000000' }}
+          TOP_N: ${{ vars.TOP_N || '50' }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: python -m ict_scanner scan
 

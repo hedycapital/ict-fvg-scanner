@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-INTERVAL_MS = 900_000  # 15m 周期（毫秒）；TIMEFRAME 固定 15m，全局唯一常量
+INTERVAL_MS = 3_600_000  # 1h 周期（毫秒）；与 TIMEFRAME 默认值同步修改，全局唯一常量
 
 
 class Direction(str, Enum):
@@ -23,7 +23,7 @@ class Direction(str, Enum):
 class EventType(str, Enum):
     """缺口生命周期事件。
 
-    FORMATION  新缺口形成并被推入盒子数组 → 推送
+    FORMATION  新缺口形成并被推入盒子数组 → 仅 state 后台记录，不推送
     MITIGATION 价格触及已有缺口（视为回补）→ 推送
     EVICTED    数组超容量被挤出（max_boxes=3 先进先出）→ 不推送
     """
@@ -31,6 +31,12 @@ class EventType(str, Enum):
     FORMATION = "FORMATION"
     MITIGATION = "MITIGATION"
     EVICTED = "EVICTED"
+
+
+# 推送白名单：只有命中的事件类型会触发 Telegram 推送。
+# FORMATION 降级为后台记录（state 盒子持久化），避免盘整期新缺口泛滥推送；
+# 只有"二次回踩"这一价格实际反应的瞬间才值得打扰用户。
+PUSHABLE_EVENT_TYPES = frozenset({EventType.MITIGATION})
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +55,7 @@ class Candle:
     def from_hyperliquid(cls, k: dict) -> Candle:
         """从 Hyperliquid candleSnapshot 对象构造：{"t","o","h","l","c","v"}（价格为 str）。
 
-        HL 无 close_time 字段，由开盘时间 + 周期推导（15m 对齐 UTC 季度刻度）。
+        HL 无 close_time 字段，由开盘时间 + 周期推导（1h 对齐 UTC 整点刻度）。
         """
         t = int(k["t"])
         return cls(

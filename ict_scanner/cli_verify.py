@@ -1,6 +1,6 @@
 """verify 子命令：TV 一致性人工比对工具。
 
-输出三段内容，供用户在 TradingView `HIP3XYZ:<ASSET>USDC.P` 15m 图表上逐项核对：
+输出三段内容，供用户在 TradingView `HIP3XYZ:<ASSET>USDC.P` 1h 图表上逐项核对：
   ① 最新 3 根已收盘 K 线 OHLC   —— 数据同源对齐
   ② 当前活跃缺口（老→新）      —— 对照 TV 图表上现存的 FVG 盒子
   ③ 近期事件日志                —— 对照 TV 上已消失（被回补/挤出）的盒子
@@ -45,7 +45,7 @@ def run_verify(symbol: str, limit: int, interval: str) -> int:
     closed = [c for c in candles if c.close_time <= now_ms]
 
     print(f"═══ verify {coin} {interval} ═══")
-    print(f"TV 对照图表: {tv_chart_symbol(coin)} （15m）")
+    print(f"TV 对照图表: {tv_chart_symbol(coin)} （{interval}）")
     print(f"拉取 {len(candles)} 根，已收盘 {len(closed)} 根（丢弃未收盘 {len(candles) - len(closed)} 根）")
 
     if len(closed) < 3:
@@ -82,6 +82,6 @@ def run_verify(symbol: str, limit: int, interval: str) -> int:
 
 def build_verify_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--symbol", default="xyz:TSLA", help="标的，如 xyz:TSLA（可省略前缀写 TSLA）")
-    parser.add_argument("--limit", type=int, default=1500, help="拉取 K 线根数（默认 1500 ≈ 15.6 天）")
-    parser.add_argument("--interval", default="15m", help="K 线周期（默认 15m）")
+    parser.add_argument("--limit", type=int, default=1500, help="拉取 K 线根数（默认 1500 ≈ 62.5 天的 1h K 线）")
+    parser.add_argument("--interval", default="1h", help="K 线周期（默认 1h）")
     return parser

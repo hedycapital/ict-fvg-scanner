@@ -14,16 +14,15 @@ from urllib.parse import quote
 import requests
 
 from .config import AppConfig
-from .models import Direction, EventType
+from .models import PUSHABLE_EVENT_TYPES, Direction, EventType
 from .scanner import SymbolOutcome
 
 TELEGRAM_LIMIT = 4000      # 官方上限 4096，留余量
 MAX_ATTEMPTS = 3
 _RETRY_BACKOFF = (2.0, 4.0, 8.0)
 
-# 事件类型 → (图标, 动作词)：形成 = 新缺口入场，回补 = 价格触及已删除
+# 事件类型 → (图标, 动作词)：回补 = 价格实际触及缺口（形成仅后台记录不推送）
 _EVENT_TAG = {
-    EventType.FORMATION: ("🆕", "形成"),
     EventType.MITIGATION: ("🎯", "回补"),
 }
 _DIR_TAG = {Direction.BULL: "🟢BULL", Direction.BEAR: "🔴BEAR"}
@@ -62,14 +61,17 @@ def build_blocks(outcomes: list[SymbolOutcome]) -> list[str]:
     版式契约：
       标题行（轮次时间 + 标的数 + 事件数，续块重复）
       ── 每标的：链接标题行（含事件数）+ 树状缩进事件行
-      事件行四要素：动作(形成/回补) · 方向(BULL/BEAR) · 价格区间 · 时间
+      事件行四要素：动作(回补) · 方向(BULL/BEAR) · 价格区间 · 时间
+      无可推送事件 → 返回空列表（不发消息）
     """
-    # EVICTED（数组挤出）是内部生命周期事件，不推送、不计数
+    # 推送白名单过滤：仅 MITIGATION 触达推送（FORMATION 后台记录、EVICTED 内部事件）
     groups = [
-        (o, [e for e in o.events if e.event_type is not EventType.EVICTED])
+        (o, [e for e in o.events if e.event_type in PUSHABLE_EVENT_TYPES])
         for o in outcomes
     ]
     groups = [(o, evs) for o, evs in groups if evs]
+    if not groups:
+        return []  # 全轮无可推送事件：不发空消息
     n_events = sum(len(evs) for _, evs in groups)
     now = dt.datetime.now(dt.timezone.utc)
     header = (
@@ -81,7 +83,7 @@ def build_blocks(outcomes: list[SymbolOutcome]) -> list[str]:
     blocks: list[str] = []
     current = header
     for outcome, pushable in groups:
-        # 标的名直接做成 TV 图表链接，点击即查看该合约 15m 图
+        # 标的名直接做成 TV 图表链接，点击即查看该合约 1h 图
         display = html.escape(outcome.symbol.partition(":")[2] or outcome.symbol)
         url = tv_chart_url(outcome.symbol)
         n = len(pushable)
@@ -101,8 +103,7 @@ def build_blocks(outcomes: list[SymbolOutcome]) -> list[str]:
             current = header + chunk
         else:
             current += chunk
-    if current.strip() != header.strip() or not blocks:
-        blocks.append(current)
+    blocks.append(current)  # groups 非空，current 必含事件内容
     return blocks
 
 

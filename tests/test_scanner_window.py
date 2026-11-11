@@ -24,7 +24,7 @@ SYMBOL = "TESTUSDT"
 def _config() -> AppConfig:
     return AppConfig(
         symbols=[SYMBOL],
-        timeframe="15m",
+        timeframe="1h",
         kline_limit_cold=1500,
         max_boxes=3,
         displacement_ratio=0.6,

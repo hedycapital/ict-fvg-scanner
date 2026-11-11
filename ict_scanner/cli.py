@@ -19,7 +19,7 @@ def _setup_stdio() -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ict_scanner",
-        description="ICT FVG 缺口扫描系统（Hyperliquid HIP-3 美股代币/商品/外汇 / 15m 已收盘 K 线）",
+        description="ICT FVG 缺口扫描系统（Hyperliquid HIP-3 美股代币/商品/外汇 / 1h 已收盘 K 线）",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

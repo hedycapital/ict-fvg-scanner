@@ -1,6 +1,6 @@
 """测试夹具：K 线 / 盒子构造辅助。
 
-时间戳从 1_000_000_000_000 起，每根 +15 分钟（900_000 ms），与生产周期一致。
+时间戳从 1_000_000_000_000 起，每根 +1 小时（3_600_000 ms），与生产周期一致。
 价格用简单十进制值，人工可验证。
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 from ict_scanner.models import Box, Candle, Direction
 
 BASE_TIME = 1_000_000_000_000
-STEP_MS = 900_000  # 15 分钟
+STEP_MS = 3_600_000  # 1 小时
 
 
 def make_candle(index: int, o: float, h: float, l: float, c: float) -> Candle:
